@@ -11,6 +11,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
+
 class RoverNasaAPI:
     CURIOSITY = 'curiosity'
     PERSEVERANCE = 'perseverance'
