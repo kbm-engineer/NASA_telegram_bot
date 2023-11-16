@@ -1,10 +1,14 @@
-TOKEN = '6538881829:AAHyi660uSppbOwr2RKlpwqbSFnzZs-8gUA'
-
-
+import os
+from dotenv import load_dotenv
 import logging
+
 from telegram import Update, InputMediaPhoto
-from telegram.ext import filters, ApplicationBuilder, CommandHandler, MessageHandler, CallbackContext, ContextTypes
+from telegram.ext import filters, ApplicationBuilder, MessageHandler, ContextTypes
+
 import requests
+
+
+load_dotenv()
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -13,8 +17,8 @@ logging.basicConfig(
 
 
 class RoverNasaAPI:
-    CURIOSITY = 'curiosity'
-    PERSEVERANCE = 'perseverance'
+    CURIOSITY = 'Curiosity'
+    PERSEVERANCE = 'Perseverance'
     CAMERA = 'camera'
 
     ROVERS = {
@@ -45,27 +49,20 @@ class RoverNasaAPI:
         },
     }
 
-    def __init__(self, api_key):
+    def __init__(self, api_key): #update: Update
         self.api_key = api_key
+        #self.update = update
 
 
-    @staticmethod
-    async def get_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        chat_id = update.effective_chat.id
-        
-        link = f'https://api.nasa.gov/mars-photos/api/v1/rovers/{RoverNasaAPI.CURIOSITY}/photos'
-        api_key = 'DnZoGGbzG4v2pa2rBT1NT2egAWTeSCakqjxVWvf7'
-        earth_date = update.message.text
-
-        await context.bot.send_message(chat_id=chat_id, text='Секундочку...')
+    async def poll_link(self, name_rover, earth_date):
+        link = f'https://api.nasa.gov/mars-photos/api/v1/rovers/{name_rover}/photos'
         photo_list = []
-        for cam in RoverNasaAPI.ROVERS.get(RoverNasaAPI.CURIOSITY).get(RoverNasaAPI.CAMERA):
+        for cam in self.ROVERS.get(name_rover).get(self.CAMERA):
             params = {
-                'api_key': api_key,
+                'api_key': self.api_key,
                 'earth_date': earth_date,
                 'camera': cam,
             }
-
             try:
                 response = requests.get(link, params=params)
                 data = response.json()
@@ -74,17 +71,33 @@ class RoverNasaAPI:
                 photo_list.append(InputMediaPhoto(media=image_data))
             except:
                 break
-        try:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f'Доступность камер: -----------. Загружаем сники...')
-            await context.bot.send_media_group(chat_id=chat_id, media=photo_list)
-        except:
-            await context.bot.send_message(chat_id=chat_id, text=f'За {earth_date} нет фотографий')
+        return photo_list
+
+    async def get_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        chat_id = update.effective_chat.id
+        earth_date = update.message.text
+        for rover in self.ROVERS:
+            await context.bot.send_message(chat_id=chat_id, text= f'Запрос фотографий с марсохода {rover}')
+            photo_list = await self.poll_link(rover, earth_date)
+            try:
+                await context.bot.send_media_group(chat_id=chat_id, media=photo_list)
+            except:
+                await context.bot.send_message(chat_id=chat_id, text=f'Для "{rover}" нет фотографий')
+        
+        # try:
+        #     await context.bot.send_message(
+        #         chat_id=chat_id,
+        #         text=f'Доступность камер: -----------. Загружаем сники...')
+        #     await context.bot.send_media_group(chat_id=chat_id, media=photo_list)
+        # except:
+        #     await context.bot.send_message(chat_id=chat_id, text=f'За {earth_date} нет фотографий')
 
 
 if __name__ == '__main__':
+    TOKEN = os.getenv("TOKEN")
+    API_KEY = os.getenv("API_KEY")
     application = ApplicationBuilder().token(TOKEN).build()
-    get_image_handler = MessageHandler(filters.ALL, RoverNasaAPI.get_image)
+    rover = RoverNasaAPI(API_KEY)
+    get_image_handler = MessageHandler(filters.ALL, rover.get_image)
     application.add_handler(get_image_handler)
     application.run_polling()
