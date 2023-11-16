@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import logging
 
+
 from telegram import Update, InputMediaPhoto
 from telegram.ext import filters, ApplicationBuilder, MessageHandler, ContextTypes
 
@@ -10,10 +11,33 @@ import requests
 
 load_dotenv()
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# logging.basicConfig(
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     level=logging.WARNING
+# )
+
+
+class CustomLogger:
+    def __init__(self, name):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(logging.DEBUG)  # Устанавливаем уровень логирования по умолчанию
+
+        # Создаем обработчик для вывода в консоль
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)  # Устанавливаем уровень логирования для этого обработчика
+
+        # Создаем форматтер для вывода
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(formatter)
+
+        # Добавляем обработчик к логгеру
+        self.logger.addHandler(console_handler)
+
+    def info(self, message):
+        self.logger.info(message)
+
+    def warning(self, message):
+        self.logger.warning(message)
 
 
 class RoverNasaAPI:
@@ -64,18 +88,23 @@ class RoverNasaAPI:
                 'camera': cam,
             }
             try:
+                logger.info(f'Запрос фото на {earth_date}')
                 response = requests.get(link, params=params)
                 data = response.json()
                 data_json = data["photos"][0]["img_src"]
                 image_data = requests.get(data_json).content
                 photo_list.append(InputMediaPhoto(media=image_data))
             except:
+                logger.warning(f'Нет фотографий в дату запроса')
                 break
         return photo_list
 
     async def get_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
+        usernam_chat = update.effective_chat.username
         earth_date = update.message.text
+        logger.info(f'Поступил запрос от {usernam_chat}')
+
         for rover in self.ROVERS:
             await context.bot.send_message(chat_id=chat_id, text= f'Запрос фотографий с марсохода {rover}')
             photo_list = await self.poll_link(rover, earth_date)
@@ -94,6 +123,7 @@ class RoverNasaAPI:
 
 
 if __name__ == '__main__':
+    logger = CustomLogger(__name__)
     TOKEN = os.getenv("TOKEN")
     API_KEY = os.getenv("API_KEY")
     application = ApplicationBuilder().token(TOKEN).build()
